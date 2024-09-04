@@ -5,45 +5,54 @@ GENERATE_ZIP=false
 BUILD_PATH="./build"
 
 # Set options based on user input
-if [ -z "$1" ]; then
+if [ -n "$1" ]; then
   GENERATE_ZIP="$1"
 fi
 
-# If not configured defaults to repository name
+# If not configured, default to repository name
 if [ -z "$PLUGIN_SLUG" ]; then
   PLUGIN_SLUG=${GITHUB_REPOSITORY#*/}
 fi
 
 # Set GitHub "path" output
 DEST_PATH="$BUILD_PATH/$PLUGIN_SLUG"
-echo "::set-output name=path::$DEST_PATH"
+echo "path=$DEST_PATH" >> "$GITHUB_OUTPUT"
 
+# Navigate to the workspace
 cd "$GITHUB_WORKSPACE" || exit
 
+# Install PHP and JS dependencies
 echo "Installing PHP and JS dependencies..."
-npm install
+yarn install || exit "$?"
 composer install || exit "$?"
+
+# Run JS build
 echo "Running JS Build..."
-npm run build:core || exit "$?"
+yarn run build || exit "$?"
+
+# Clean up PHP dependencies
 echo "Cleaning up PHP dependencies..."
 composer install --no-dev || exit "$?"
 
+# Create the build directory
 echo "Generating build directory..."
 rm -rf "$BUILD_PATH"
 mkdir -p "$DEST_PATH"
 
+# Rsync files excluding those in .distignore, if present
 if [ -r "${GITHUB_WORKSPACE}/.distignore" ]; then
-  rsync -rc --exclude-from="$GITHUB_WORKSPACE/.distignore" "$GITHUB_WORKSPACE/" "$DEST_PATH/" --delete --delete-excluded
+  rsync -rc --exclude-from="$GITHUB_WORKSPACE/.distignore" "$GITHUB_WORKSPACE/" "$DEST_PATH/" --delete --delete-excluded || exit "$?"
 else
-  rsync -rc "$GITHUB_WORKSPACE/" "$DEST_PATH/" --delete
+  rsync -rc "$GITHUB_WORKSPACE/" "$DEST_PATH/" --delete || exit "$?"
 fi
 
-if ! $GENERATE_ZIP; then
+# Generate the zip file if requested
+if [ "$GENERATE_ZIP" = true ]; then
   echo "Generating zip file..."
   cd "$BUILD_PATH" || exit
-  zip -r "${PLUGIN_SLUG}.zip" "$PLUGIN_SLUG/"
+  zip -r "${PLUGIN_SLUG}.zip" "$PLUGIN_SLUG/" || exit "$?"
   # Set GitHub "zip_path" output
-  echo "::set-output name=zip_path::$BUILD_PATH/${PLUGIN_SLUG}.zip"
+  echo "zip_path=$BUILD_PATH/${PLUGIN_SLUG}.zip" >> "$GITHUB_OUTPUT"
   echo "Zip file generated!"
 fi
 
