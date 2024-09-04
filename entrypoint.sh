@@ -34,11 +34,6 @@ yarn run build || exit "$?"
 echo "Cleaning up PHP dependencies..."
 composer install --no-dev || exit "$?"
 
-# Create the build directory
-echo "Generating build directory..."
-rm -rf "$BUILD_PATH"
-mkdir -p "$DEST_PATH"
-
 # Rsync files excluding those in .distignore, if present
 if [ -r "${GITHUB_WORKSPACE}/.distignore" ]; then
   rsync -rc --exclude-from="$GITHUB_WORKSPACE/.distignore" "$GITHUB_WORKSPACE/" "$DEST_PATH/" --delete --delete-excluded || exit "$?"
